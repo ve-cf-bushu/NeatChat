@@ -11,17 +11,11 @@ import { copyToClipboard, useWindowSize } from "../utils";
 import mermaid from "mermaid";
 import Locale from "../locales";
 import LoadingIcon from "../icons/three-dots.svg";
-import ReloadButtonIcon from "../icons/reload.svg";
 import React from "react";
 import { useDebouncedCallback } from "use-debounce";
-import { showImageModal, FullScreen, showToast } from "./ui-lib";
-import {
-  ArtifactsShareButton,
-  HTMLPreview,
-  HTMLPreviewHander,
-} from "./artifacts";
+import { showImageModal, showToast } from "./ui-lib";
+import { HTMLPreview, HTMLPreviewHander } from "./artifacts";
 import { useChatStore } from "../store";
-import { IconButton } from "./button";
 
 import { useAppConfig } from "../store/config";
 import { FileAttachment } from "./file-attachment";
@@ -160,25 +154,12 @@ export function PreCode(props: { children: any }) {
         <Mermaid code={mermaidCode} key={mermaidCode} />
       )}
       {htmlCode.length > 0 && enableArtifacts && (
-        <FullScreen className="no-dark html" right={70}>
-          <ArtifactsShareButton
-            style={{ position: "absolute", right: 20, top: 10 }}
-            getCode={() => htmlCode}
-          />
-          <IconButton
-            style={{ position: "absolute", right: 120, top: 10 }}
-            bordered
-            icon={<ReloadButtonIcon />}
-            shadow
-            onClick={() => previewRef.current?.reload()}
-          />
-          <HTMLPreview
-            ref={previewRef}
-            code={htmlCode}
-            autoHeight={!document.fullscreenElement}
-            height={!document.fullscreenElement ? 600 : height}
-          />
-        </FullScreen>
+        <HTMLPreview
+          ref={previewRef}
+          code={htmlCode}
+          autoHeight={!document.fullscreenElement}
+          height={!document.fullscreenElement ? 600 : height}
+        />
       )}
     </>
   );
@@ -314,6 +295,16 @@ function formatThinkText(text: string): string {
     return null;
   };
 
+  // 转义HTML特殊字符的函数
+  const escapeHtml = (str: string) => {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
   // 处理正在思考的情况（只有开始标签）
   if (text.startsWith("<think>") && !text.includes("</think>")) {
     // 获取 <think> 后的所有内容
@@ -331,8 +322,9 @@ function formatThinkText(text: string): string {
       console.error("保存思考开始时间出错:", e);
     }
 
-    // 给每一行添加引用符号
-    const quotedContent = thinkContent
+    // 转义内容中的HTML标签，然后给每一行添加引用符号
+    const escapedContent = escapeHtml(thinkContent);
+    const quotedContent = escapedContent
       .split("\n")
       .map((line: string) => (line.trim() ? `> ${line}` : ">"))
       .join("\n");
@@ -348,15 +340,16 @@ ${quotedContent}
   // 处理完整的思考过程（有结束标签）
   const pattern = /^<think>([\s\S]*?)<\/think>/;
   return text.replace(pattern, (match, thinkContent) => {
-    // 给每一行添加引用符号
-    const quotedContent = thinkContent
+    // 转义内容中的HTML标签，然后给每一行添加引用符号
+    const escapedContent = escapeHtml(thinkContent);
+    const quotedContent = escapedContent
       .split("\n")
       .map((line: string) => (line.trim() ? `> ${line}` : ">"))
       .join("\n");
 
     // 获取思考用时
     const duration = handleThinkingTime(thinkContent);
-    const durationText = duration ? ` (用时 ${duration} 秒)` : "";
+    const durationText = duration ? Locale.NewChat.ThinkingTime(duration) : "";
 
     return `<details open>
 <summary>${Locale.NewChat.Think}${durationText}</summary>
@@ -451,17 +444,8 @@ function _MarkDownContent(props: { content: string }) {
 
           // 检测并阻止javascript协议
           if (href.toLowerCase().startsWith("javascript:")) {
-            // 返回没有href的链接或替换为安全的替代方案
-            return (
-              <a
-                {...aProps}
-                onClick={(e) => e.preventDefault()}
-                style={{ color: "gray", textDecoration: "line-through" }}
-                title="已阻止不安全链接"
-              >
-                {aProps.children}
-              </a>
-            );
+            // 简单地显示文本内容，不添加任何特殊样式或提示
+            return <span>{aProps.children}</span>;
           }
 
           // 处理文件附件链接
@@ -669,7 +653,7 @@ export function Markdown(
 
   // 检测是否滚动到底部
   const checkIfAtBottom = (target: HTMLDivElement) => {
-    const threshold = 20;
+    const threshold = 10;
     const bottomPosition =
       target.scrollHeight - target.scrollTop - target.clientHeight;
     return bottomPosition <= threshold;
